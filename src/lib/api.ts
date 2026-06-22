@@ -214,10 +214,10 @@ export const purchaseApi = {
   updatePurchaseOrder: (id: number, data: Partial<Omit<PurchaseOrder, 'id'>>): Promise<ApiResponse<PurchaseOrder>> =>
     api.put(`/purchase/${id}`, data).then((res) => responseHandler<PurchaseOrder>(res)),
 
-  stockInPurchaseOrder: (id: number, data: { items: Array<{ id: number; stockInQty: number }> }): Promise<ApiResponse<PurchaseOrder>> =>
+  stockInPurchaseOrder: (id: number, data: { items: Array<{ id: number; stockInQty: number }>; operatorId: number }): Promise<ApiResponse<PurchaseOrder>> =>
     api.post(`/purchase/${id}/stock-in`, data).then((res) => responseHandler<PurchaseOrder>(res)),
 
-  updatePurchasePayment: (id: number, data: { paidAmount: number; payMethod: string }): Promise<ApiResponse<PurchaseOrder>> =>
+  updatePurchasePayment: (id: number, data: { paidAmount: number; payMethod: string; operatorId: number }): Promise<ApiResponse<PurchaseOrder>> =>
     api.put(`/purchase/${id}/payment`, data).then((res) => responseHandler<PurchaseOrder>(res)),
 
   deletePurchaseOrder: (id: number): Promise<ApiResponse<void>> =>

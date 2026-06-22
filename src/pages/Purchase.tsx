@@ -3,6 +3,7 @@ import { Search, Plus, Trash2, Eye, PackageOpen } from 'lucide-react';
 import { format } from 'date-fns';
 import { purchaseApi, supplierApi, productApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
+import { useToast } from '@/components/ui/Toast';
 import { Button, Modal, Input, Select, Table, Badge, type TableColumn } from '@/components/ui';
 import type { PurchaseOrder, PurchaseOrderItem, Supplier, Product } from '../../shared/types';
 import { PAY_METHOD_LABELS } from '../../shared/types';
@@ -68,6 +69,7 @@ interface StockInRow {
 
 export default function Purchase() {
   const user = useAuthStore((s) => s.user);
+  const toast = useToast();
 
   const [orders, setOrders] = useState<PurchaseOrder[]>([]);
   const [total, setTotal] = useState(0);
@@ -221,21 +223,26 @@ export default function Purchase() {
   const totalAmount = orderItems.reduce((sum, item) => sum + item.amount, 0);
 
   async function handleCreateOrder() {
-    if (!selectedSupplierId || orderItems.length === 0) return;
+    if (!selectedSupplierId) {
+      toast.warning('请选择供应商');
+      return;
+    }
+    const validItems = orderItems.filter((item) => item.productId > 0);
+    if (validItems.length === 0) {
+      toast.warning('请至少添加一个有效商品');
+      return;
+    }
     setCreating(true);
     try {
-      const items: PurchaseOrderItem[] = orderItems
-        .filter((item) => item.productId > 0)
-        .map((item) => ({
-          productId: item.productId,
-          productName: item.productName,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-          amount: item.amount,
-          stockInQty: 0,
-        }));
-      if (items.length === 0) return;
-      await purchaseApi.createPurchaseOrder({
+      const items: PurchaseOrderItem[] = validItems.map((item) => ({
+        productId: item.productId,
+        productName: item.productName,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        amount: item.amount,
+        stockInQty: 0,
+      }));
+      const res = await purchaseApi.createPurchaseOrder({
         supplierId: Number(selectedSupplierId),
         items,
         totalAmount,
@@ -245,8 +252,15 @@ export default function Purchase() {
         stockStatus: 'pending',
         operatorId: user?.id ?? 1,
       });
-      setCreateModalOpen(false);
-      fetchOrders();
+      if (res.success) {
+        toast.success('采购单创建成功');
+        setCreateModalOpen(false);
+        fetchOrders();
+      } else {
+        toast.error(res.message || '创建采购单失败');
+      }
+    } catch (error: any) {
+      toast.error(error?.message || '创建采购单失败，请重试');
     } finally {
       setCreating(false);
     }
@@ -280,13 +294,27 @@ export default function Purchase() {
 
   async function handleStockInSubmit() {
     if (!stockInOrder) return;
+    const itemsToStockIn = stockInRows.filter((r) => r.inputQty > 0);
+    if (itemsToStockIn.length === 0) {
+      toast.warning('请至少填写一个商品的入库数量');
+      return;
+    }
     setStockInSubmitting(true);
     try {
-      const items = stockInRows.filter((r) => r.inputQty > 0).map((r) => ({ id: r.id, stockInQty: r.inputQty }));
-      if (items.length === 0) return;
-      await purchaseApi.stockInPurchaseOrder(stockInOrder.id!, { items });
-      setStockInModalOpen(false);
-      fetchOrders();
+      const items = itemsToStockIn.map((r) => ({ id: r.id, stockInQty: r.inputQty }));
+      const res = await purchaseApi.stockInPurchaseOrder(stockInOrder.id!, { 
+        items, 
+        operatorId: user?.id ?? 1 
+      });
+      if (res.success) {
+        toast.success('入库成功');
+        setStockInModalOpen(false);
+        fetchOrders();
+      } else {
+        toast.error(res.message || '入库失败');
+      }
+    } catch (error: any) {
+      toast.error(error?.message || '入库失败，请重试');
     } finally {
       setStockInSubmitting(false);
     }
